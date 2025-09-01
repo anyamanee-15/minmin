@@ -5,48 +5,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-  <!-- mqtt.js -->
-  <script src="https://anyamanee-15.github.io/minmin/"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
-    #webcam-container { max-width: 100%; margin: 10px auto; }
-    video { max-width: 100%; height: auto; }
+    #webcam-container { max-width: 100%; margin: 10px auto; transform: scaleX(-1); } /* mirror */
+    video { max-width: 100%; height: auto; transform: scaleX(-1); } /* mirror video */
     #label-container { margin: 10px; font-size: 1.2em; }
+    #mqtt-status { margin: 5px; font-size: 14px; color: blue; }
     button { padding: 10px 20px; font-size: 1em; margin: 5px; }
   </style>
 </head>
 <body>
-  <div>Teachable Machine Image Model with MQTT</div>
-  <button type="button" onclick="init('environment')">Start Back Camera</button>
-  <button type="button" onclick="init('user')">Start Front Camera</button>
-  <button type="button" onclick="stop()">Stop</button>
+  <h2>Teachable Machine + MQTT</h2>
+  <button onclick="init('environment')">Start Back Camera</button>
+  <button onclick="init('user')">Start Front Camera</button>
+  <button onclick="stop()">Stop</button>
+  <button onclick="manualSend()">Send to MQTT</button>
+  <div id="mqtt-status">MQTT Status: Disconnected</div>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
 
-  <script type="text/javascript">
-    const URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
+  <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/model.json";
+    const METADATA_URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/metadata.json";
+
+    const MQTT_BROKER = "wss://broker.hivemq.com:8000/mqtt";
+    const MQTT_TOPIC = "Aun";
+
     let model, webcam, labelContainer, maxPredictions;
+    let bestPrediction = {label: "", probability: 0};
+    let client;
 
-    // MQTT CONFIG
-    const broker = "wss://broker.hivemq.com:8000/mqtt"; 
-    const topic = "tm/test";
-
-    const client = mqtt.connect(broker);
+    // MQTT connect
+    client = mqtt.connect(MQTT_BROKER);
 
     client.on("connect", () => {
-      console.log("MQTT connected");
+      document.getElementById("mqtt-status").innerText = "MQTT Status: Connected";
     });
 
     client.on("error", (err) => {
-      console.error("MQTT error:", err);
+      document.getElementById("mqtt-status").innerText = "MQTT Status: Error";
+      console.error("MQTT Error:", err);
     });
 
-    // INIT CAMERA AND MODEL
     async function init(facingMode) {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-
-      model = await tmImage.load(modelURL, metadataURL);
+      model = await tmImage.load(MODEL_URL, METADATA_URL);
       maxPredictions = model.getTotalClasses();
 
       webcam = new tmImage.Webcam(224, 224, false);
@@ -54,16 +57,15 @@
         await webcam.setup({ facingMode: facingMode });
         await webcam.play();
         window.requestAnimationFrame(loop);
-      } catch (e) {
-        console.error("Webcam setup failed:", e);
-        document.getElementById("label-container").innerText = "Error: " + e.message;
+      } catch(e) {
+        document.getElementById("label-container").innerText = "Webcam Error: " + e.message;
         return;
       }
 
       document.getElementById("webcam-container").appendChild(webcam.canvas);
       labelContainer = document.getElementById("label-container");
       labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
+      for(let i=0;i<maxPredictions;i++){
         labelContainer.appendChild(document.createElement("div"));
       }
     }
@@ -77,37 +79,46 @@
     async function predict() {
       const prediction = await model.predict(webcam.canvas);
 
-      let bestLabel = "";
-      let bestProb = 0;
-
-      for (let i = 0; i < maxPredictions; i++) {
+      let best = {label:"", probability:0};
+      for(let i=0;i<maxPredictions;i++){
         const prob = prediction[i].probability;
-        const classPrediction = prediction[i].className + ": " + prob.toFixed(2);
-        labelContainer.childNodes[i].innerHTML = classPrediction;
-
-        if (prob > bestProb) {
-          bestProb = prob;
-          bestLabel = prediction[i].className;
+        labelContainer.childNodes[i].innerHTML = prediction[i].className + ": " + prob.toFixed(2);
+        if(prob > best.probability){
+          best = {label: prediction[i].className, probability: prob};
         }
       }
 
-      // Send to MQTT only if probability >= 0.95
-      if (bestProb >= 0.95) {
-        const payload = JSON.stringify({
-          label: bestLabel,
-          probability: bestProb.toFixed(2),
-          timestamp: Date.now()
-        });
-        console.log("Send to MQTT:", payload);
-        client.publish(topic, payload);
+      bestPrediction = best;
+
+      // ส่งอัตโนมัติถ้า >=0.95
+      if(best.probability >= 0.95 && client.connected){
+        sendToMQTT(best);
       }
     }
 
-    function stop() {
-      if (webcam) {
+    function sendToMQTT(pred){
+      const payload = JSON.stringify({
+        label: pred.label,
+        probability: pred.probability.toFixed(2),
+        timestamp: Date.now()
+      });
+      client.publish(MQTT_TOPIC, payload);
+      console.log("Sent to MQTT:", payload);
+    }
+
+    function manualSend(){
+      if(client.connected && bestPrediction.label!=""){
+        sendToMQTT(bestPrediction);
+      }else{
+        alert("MQTT not connected or no prediction yet");
+      }
+    }
+
+    function stop(){
+      if(webcam){
         webcam.stop();
-        document.getElementById("webcam-container").innerHTML = '';
-        document.getElementById("label-container").innerHTML = '';
+        document.getElementById("webcam-container").innerHTML = "";
+        document.getElementById("label-container").innerHTML = "";
       }
     }
   </script>
