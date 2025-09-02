@@ -31,24 +31,30 @@
       font-size: 1em;
       margin: 5px;
     }
+    #status {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #007BFF;
+    }
   </style>
 </head>
 <body>
   <div>Teachable Machine Image Model (Mobile)</div>
-  <button type="button" onclick="init('environment')">Start (Back Camera)</button>
-  <button type="button" onclick="init('user')">Start (Front Camera)</button>
+  <button type="button" onclick="init('environment')">Back Camera</button>
+  <button type="button" onclick="init('user')">Front Camera</button>
   <button type="button" onclick="stop()">Stop</button>
   <button type="button" onclick="toggleMQTT()">Connect/Disconnect MQTT</button>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
+  <div id="status">MQTT Status: Not connected</div>
 
   <script type="text/javascript">
     const URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
     let model, webcam, labelContainer, maxPredictions;
     let mqttClient = null;
     let isConnected = false;
-    const mqttHost = "wss://your-mqtt-broker-url";  // Replace with your MQTT broker URL
-    const mqttTopic = "aun";  // Replace with your desired topic
+    const mqttHost = "wss://mqtt-dashboard.com";  // Use mqtt-dashboard.com as the broker
+    const mqttTopic = "aun";  // Set your topic here
 
     async function init(facingMode) {
       const modelURL = URL + "model.json";
@@ -57,10 +63,10 @@
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
 
-      // Setup webcam
-      webcam = new tmImage.Webcam(224, 224, false); // Use 224x224
+      // Setup webcam with selected facingMode (user or environment)
+      webcam = new tmImage.Webcam(224, 224, false); // Use 224x224 resolution
       try {
-        await webcam.setup({ facingMode: facingMode }); // Choose front (user) or back (environment) camera
+        await webcam.setup({ facingMode: facingMode }); // Select front (user) or back (environment) camera
         await webcam.play();
         if (!webcam.canvas) {
           throw new Error("Webcam canvas is not initialized");
@@ -75,7 +81,7 @@
 
       document.getElementById("webcam-container").appendChild(webcam.canvas);
       labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = ""; // Clear old results
+      labelContainer.innerHTML = ""; // Clear previous results
       for (let i = 0; i < maxPredictions; i++) {
         labelContainer.appendChild(document.createElement("div"));
       }
@@ -116,16 +122,19 @@
       if (isConnected) {
         mqttClient.end();  // Disconnect from MQTT broker
         isConnected = false;
+        document.getElementById("status").innerText = "MQTT Status: Disconnected";
         console.log("Disconnected from MQTT");
       } else {
         mqttClient = mqtt.connect(mqttHost);
         mqttClient.on('connect', function () {
-          console.log("Connected to MQTT broker");
           isConnected = true;
+          document.getElementById("status").innerText = "MQTT Status: Connected";
+          console.log("Connected to MQTT broker");
         });
         mqttClient.on('error', function (error) {
           console.error("MQTT connection error:", error);
           isConnected = false;
+          document.getElementById("status").innerText = "MQTT Status: Connection Failed";
         });
       }
     }
