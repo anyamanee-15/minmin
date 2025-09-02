@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teachable Machine + MQTT</title>
+  <title>Teachable Machine + HiveMQ</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -101,14 +101,21 @@
         document.getElementById("status").innerText = "MQTT Status: Disconnected (Topic: aun)";
         document.getElementById("status").className = "disconnected";
       } else {
-        // ใช้ public broker ที่รองรับ WSS
-        const mqttHost = "wss://test.mosquitto.org:8081";
-        mqttClient = mqtt.connect(mqttHost);  // ไม่ต้องกำหนด clientId
+        // HiveMQ WSS port 8884
+        const mqttHost = "wss://YOUR-HIVEMQ-HOST:8884"; // แก้เป็น host ของคุณ
+        const options = {
+          clientId: "clientId-" + Math.random().toString(16).substr(2, 8),
+          username: "YOUR_USERNAME", // ถ้ามี
+          password: "YOUR_PASSWORD"  // ถ้ามี
+        };
+
+        mqttClient = mqtt.connect(mqttHost, options);
 
         mqttClient.on('connect', () => {
           isConnected = true;
           document.getElementById("status").innerText = "MQTT Status: Connected (Topic: aun)";
           document.getElementById("status").className = "connected";
+          console.log("Connected to HiveMQ WSS port 8884");
         });
 
         mqttClient.on('error', (err) => {
