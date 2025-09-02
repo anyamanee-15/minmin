@@ -7,27 +7,29 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image"></script>
   <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
     #status {
       font-weight: bold;
       margin-top: 10px;
     }
-    .connected {
-      color: green;
-    }
-    .disconnected {
-      color: red;
-    }
+    .connected { color: green; }
+    .disconnected { color: red; }
+    video, canvas { display: block; margin: 5px auto; }
+    button { margin: 5px; }
   </style>
 </head>
 <body>
   <h1>Teachable Machine + MQTT</h1>
-  <button type="button" onclick="init()">Start Camera</button>
   <button type="button" onclick="connectMqtt()">Connect MQTT</button>
-  <button onclick="sendTest()">Send to MQTT</button>
-  <div id="status" class="disconnected">❌ Disconnected</div>
+  <button type="button" onclick="openCamera()">Open Camera</button>
+  <button type="button" onclick="stopCamera()">Stop Camera</button>
+  <div id="status" class="disconnected">Disconnected</div>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
-  
+
   <script>
     const modelURL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
     const mqttHost = "wss://mqtt-dashboard.com:8884/mqtt"; 
@@ -41,61 +43,55 @@
     const statusDiv = document.getElementById("status");
 
     function updateStatus(connected) {
-      if (connected) {
-        statusDiv.textContent = "✅ Connected";
-        statusDiv.className = "connected";
-      } else {
-        statusDiv.textContent = "❌ Disconnected";
-        statusDiv.className = "disconnected";
+      statusDiv.textContent = connected ? "Connected" : "Disconnected";
+      statusDiv.className = connected ? "connected" : "disconnected";
+    }
+
+    function connectMqtt() {
+      mqttClient = mqtt.connect(mqttHost, { clientId });
+      mqttClient.on("connect", () => { isConnected = true; updateStatus(true); });
+      mqttClient.on("error", (err) => console.error("MQTT Error:", err));
+      mqttClient.on("close", () => { isConnected = false; updateStatus(false); });
+    }
+
+    async function loadModel() {
+      if (!model) {
+        const modelURLjson = modelURL + "model.json";
+        const metadataURL = modelURL + "metadata.json";
+        model = await tmImage.load(modelURLjson, metadataURL);
+        maxPredictions = model.getTotalClasses();
       }
     }
 
-    // ฟังก์ชันเชื่อมต่อ MQTT
-    function connectMqtt() {
-      mqttClient = mqtt.connect(mqttHost, {
-        clientId: clientId,
-        clean: true
-      });
+    async function openCamera() {
+      if (webcam) return; // ถ้ามีกล้องอยู่แล้ว
+      await loadModel();
 
-      mqttClient.on("connect", () => {
-        console.log("Connected to MQTT broker");
-        isConnected = true;
-        updateStatus(true);
-      });
-
-      mqttClient.on("error", (err) => {
-        console.error("MQTT Error:", err);
-      });
-
-      mqttClient.on("close", () => {
-        console.log("MQTT connection closed");
-        isConnected = false;
-        updateStatus(false);
-      });
-    }
-
-    // ฟังก์ชันเปิดกล้องและโหลดโมเดล
-    async function init() {
-      const modelURLjson = modelURL + "model.json";
-      const metadataURL = modelURL + "metadata.json";
-
-      model = await tmImage.load(modelURLjson, metadataURL);
-      maxPredictions = model.getTotalClasses();
-
-      const flip = true;
-      webcam = new tmImage.Webcam(200, 200, flip);
-      await webcam.setup();
+      webcam = new tmImage.Webcam(200, 200, true);
+      await webcam.setup(); // ขออนุญาตทุกครั้ง
       await webcam.play();
-      window.requestAnimationFrame(loop);
-
       document.getElementById("webcam-container").appendChild(webcam.canvas);
+
       labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
       for (let i = 0; i < maxPredictions; i++) {
         labelContainer.appendChild(document.createElement("div"));
+      }
+
+      window.requestAnimationFrame(loop);
+    }
+
+    function stopCamera() {
+      if (webcam) {
+        webcam.stop();
+        webcam = null;
+        document.getElementById("webcam-container").innerHTML = "";
+        document.getElementById("label-container").innerHTML = "";
       }
     }
 
     async function loop() {
+      if (!webcam) return;
       webcam.update();
       await predict();
       window.requestAnimationFrame(loop);
@@ -105,29 +101,16 @@
       const prediction = await model.predict(webcam.canvas);
       for (let i = 0; i < maxPredictions; i++) {
         const prob = prediction[i].probability;
-        const classPrediction = prediction[i].className + ": " + prob.toFixed(2);
-        labelContainer.childNodes[i].innerHTML = classPrediction;
+        labelContainer.childNodes[i].innerHTML = prediction[i].className + ": " + prob.toFixed(2);
 
-        // ส่งออก MQTT ถ้า probability >= 0.95
         if (isConnected && prob >= 0.95) {
-          const message = {
-            label: prediction[i].className,
-            probability: prob.toFixed(2)
-          };
-          mqttClient.publish(mqttTopic, JSON.stringify(message));
-          console.log("Published:", message);
+          mqttClient.publish(mqttTopic, JSON.stringify({ label: prediction[i].className, probability: prob.toFixed(2) }));
         }
       }
     }
 
-    function sendTest() {
-      if (isConnected) {
-        mqttClient.publish(mqttTopic, "Hello from browser");
-        console.log("Manual message sent");
-      } else {
-        console.log("MQTT not connected");
-      }
-    }
+    // โหลดโมเดลตอนหน้าเว็บโหลดเพื่อเตรียมกล้อง
+    window.addEventListener("load", loadModel);
   </script>
 </body>
 </html>
