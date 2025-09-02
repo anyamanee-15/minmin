@@ -102,11 +102,11 @@
         document.getElementById("status").className = "disconnected";
       } else {
         // HiveMQ WSS port 8884
-        const mqttHost = "wss://YOUR-HIVEMQ-HOST:8884"; // แก้เป็น host ของคุณ
+        const mqttHost = "wss://YOUR-HIVEMQ-HOST:8884"; // <-- แก้เป็น host ของ HiveMQ ของคุณ
         const options = {
-          clientId: "clientId-" + Math.random().toString(16).substr(2, 8),
-          username: "YOUR_USERNAME", // ถ้ามี
-          password: "YOUR_PASSWORD"  // ถ้ามี
+          clientId: "clientId-" + Math.random().toString(16).substr(2, 8), // สุ่ม clientId
+          username: "YOUR_USERNAME", // ใส่ถ้ามี
+          password: "YOUR_PASSWORD"  // ใส่ถ้ามี
         };
 
         mqttClient = mqtt.connect(mqttHost, options);
