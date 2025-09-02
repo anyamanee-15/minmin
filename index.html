@@ -17,7 +17,10 @@
     }
     .connected { color: green; }
     .disconnected { color: red; }
-    video, canvas { display: block; margin: 5px auto; }
+    video, canvas {
+      display: block;
+      margin: 5px auto;
+    }
     button { margin: 5px; }
   </style>
 </head>
@@ -67,8 +70,8 @@
       if (webcam) return; // ถ้ามีกล้องอยู่แล้ว
       await loadModel();
 
-      webcam = new tmImage.Webcam(200, 200, true);
-      await webcam.setup(); // ขออนุญาตทุกครั้ง
+      webcam = new tmImage.Webcam(200, 200, true); // true = flip horizontal
+      await webcam.setup({ facingMode: "user" }); // ขออนุญาตกล้อง
       await webcam.play();
       document.getElementById("webcam-container").appendChild(webcam.canvas);
 
@@ -109,7 +112,7 @@
       }
     }
 
-    // โหลดโมเดลตอนหน้าเว็บโหลดเพื่อเตรียมกล้อง
+    // โหลดโมเดลตอนหน้าเว็บโหลดเพื่อเตรียมพร้อม
     window.addEventListener("load", loadModel);
   </script>
 </body>
