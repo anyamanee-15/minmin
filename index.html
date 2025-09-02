@@ -6,13 +6,27 @@
   <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image"></script>
+  <style>
+    #status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .connected {
+      color: green;
+    }
+    .disconnected {
+      color: red;
+    }
+  </style>
 </head>
 <body>
   <h1>Teachable Machine + MQTT</h1>
-  <button type="button" onclick="init()">Start</button>
+  <button type="button" onclick="init()">Start Camera</button>
+  <button type="button" onclick="connectMqtt()">Connect MQTT</button>
+  <button onclick="sendTest()">Send to MQTT</button>
+  <div id="status" class="disconnected">❌ Disconnected</div>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
-  <button onclick="sendTest()">Send to MQTT</button>
   
   <script>
     const modelURL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
@@ -24,7 +38,19 @@
     let mqttClient;
     let isConnected = false;
 
-    // เชื่อมต่อ MQTT
+    const statusDiv = document.getElementById("status");
+
+    function updateStatus(connected) {
+      if (connected) {
+        statusDiv.textContent = "✅ Connected";
+        statusDiv.className = "connected";
+      } else {
+        statusDiv.textContent = "❌ Disconnected";
+        statusDiv.className = "disconnected";
+      }
+    }
+
+    // ฟังก์ชันเชื่อมต่อ MQTT
     function connectMqtt() {
       mqttClient = mqtt.connect(mqttHost, {
         clientId: clientId,
@@ -34,6 +60,7 @@
       mqttClient.on("connect", () => {
         console.log("Connected to MQTT broker");
         isConnected = true;
+        updateStatus(true);
       });
 
       mqttClient.on("error", (err) => {
@@ -43,12 +70,12 @@
       mqttClient.on("close", () => {
         console.log("MQTT connection closed");
         isConnected = false;
+        updateStatus(false);
       });
     }
 
+    // ฟังก์ชันเปิดกล้องและโหลดโมเดล
     async function init() {
-      connectMqtt();
-
       const modelURLjson = modelURL + "model.json";
       const metadataURL = modelURL + "metadata.json";
 
@@ -97,6 +124,8 @@
       if (isConnected) {
         mqttClient.publish(mqttTopic, "Hello from browser");
         console.log("Manual message sent");
+      } else {
+        console.log("MQTT not connected");
       }
     }
   </script>
