@@ -34,7 +34,12 @@
     #status {
       margin-top: 20px;
       font-size: 1.2em;
-      color: #007BFF;
+    }
+    .connected {
+      color: green;
+    }
+    .disconnected {
+      color: red;
     }
   </style>
 </head>
@@ -46,15 +51,16 @@
   <button type="button" onclick="toggleMQTT()">Connect/Disconnect MQTT</button>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
-  <div id="status">MQTT Status: Not connected</div>
+  <div id="status" class="disconnected">MQTT Status: Disconnected (Topic: aun)</div>
 
   <script type="text/javascript">
     const URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
     let model, webcam, labelContainer, maxPredictions;
     let mqttClient = null;
     let isConnected = false;
-    const mqttHost = "wss://mqtt-dashboard.com";  // Use mqtt-dashboard.com as the broker
-    const mqttTopic = "aun";  // Set your topic here
+    const mqttHost = "wss://mqtt-dashboard.com:8884";  // Use mqtt-dashboard.com with port 8884 (WebSocket)
+    const mqttTopic = "aun";  // Set topic to "aun"
+    const clientId = "clientId-1ROcuAGWg1";  // Custom clientId
 
     async function init(facingMode) {
       const modelURL = URL + "model.json";
@@ -122,19 +128,29 @@
       if (isConnected) {
         mqttClient.end();  // Disconnect from MQTT broker
         isConnected = false;
-        document.getElementById("status").innerText = "MQTT Status: Disconnected";
+        document.getElementById("status").innerText = "MQTT Status: Disconnected (Topic: aun)";
+        document.getElementById("status").classList.remove('connected');
+        document.getElementById("status").classList.add('disconnected');
         console.log("Disconnected from MQTT");
       } else {
-        mqttClient = mqtt.connect(mqttHost);
+        mqttClient = mqtt.connect(mqttHost, {
+          clientId: clientId  // Use custom clientId
+        });
+
         mqttClient.on('connect', function () {
           isConnected = true;
-          document.getElementById("status").innerText = "MQTT Status: Connected";
+          document.getElementById("status").innerText = "MQTT Status: Connected (Topic: aun)";
+          document.getElementById("status").classList.remove('disconnected');
+          document.getElementById("status").classList.add('connected');
           console.log("Connected to MQTT broker");
         });
+
         mqttClient.on('error', function (error) {
           console.error("MQTT connection error:", error);
           isConnected = false;
-          document.getElementById("status").innerText = "MQTT Status: Connection Failed";
+          document.getElementById("status").innerText = "MQTT Status: Connection Failed (Topic: aun)";
+          document.getElementById("status").classList.remove('connected');
+          document.getElementById("status").classList.add('disconnected');
         });
       }
     }
