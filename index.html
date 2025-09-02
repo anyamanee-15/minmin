@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teachable Machine Image Model (Mobile)</title>
+  <title>Teachable Machine + MQTT</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -19,24 +19,24 @@
   </style>
 </head>
 <body>
-  <div>Teachable Machine Image Model (Mobile)</div>
+  <div>Teachable Machine Image Model</div>
   <button onclick="init('environment')">Back Camera</button>
   <button onclick="init('user')">Front Camera</button>
   <button onclick="stop()">Stop</button>
   <button onclick="toggleMQTT()">Connect/Disconnect MQTT</button>
+
   <div id="webcam-container"></div>
   <div id="label-container"></div>
   <div id="status" class="disconnected">MQTT Status: Disconnected (Topic: aun)</div>
 
   <script>
-    const URL = "https://teachablemachine.withgoogle.com/models/hGmOXhF9c/";
+    const URL = "https://teachablemachine.withgoogle.com/models/zI-eBMcLw/";
     let model, webcam, labelContainer, maxPredictions;
     let mqttClient = null, isConnected = false;
-    const mqttHost = "wss://mqtt-dashboard.com";
     const mqttTopic = "aun";
 
     async function init(facingMode) {
-      if(webcam) stop(); // ถ้ามีกล้องก่อนหน้า ให้หยุดก่อน
+      if (webcam) stop();
 
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
@@ -44,11 +44,11 @@
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
 
-      webcam = new tmImage.Webcam(224, 224, true); // true = flip horizontally
+      webcam = new tmImage.Webcam(224, 224, true);
       try {
         await webcam.setup({ facingMode: facingMode });
         await webcam.play();
-        document.getElementById("webcam-container").innerHTML = ''; // ล้าง container
+        document.getElementById("webcam-container").innerHTML = '';
         document.getElementById("webcam-container").appendChild(webcam.canvas);
       } catch (err) {
         console.error("Webcam init error:", err);
@@ -101,12 +101,16 @@
         document.getElementById("status").innerText = "MQTT Status: Disconnected (Topic: aun)";
         document.getElementById("status").className = "disconnected";
       } else {
-        mqttClient = mqtt.connect(mqttHost);
+        // ใช้ public broker ที่รองรับ WSS
+        const mqttHost = "wss://test.mosquitto.org:8081";
+        mqttClient = mqtt.connect(mqttHost);  // ไม่ต้องกำหนด clientId
+
         mqttClient.on('connect', () => {
           isConnected = true;
           document.getElementById("status").innerText = "MQTT Status: Connected (Topic: aun)";
           document.getElementById("status").className = "connected";
         });
+
         mqttClient.on('error', (err) => {
           console.error("MQTT Error:", err);
           isConnected = false;
